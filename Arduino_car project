@@ -14,6 +14,9 @@ int motor1Pin2 = 26;  // IN2
 int motor2Pin1 = 25;  // IN3
 int motor2Pin2 = 33;  // IN4
 
+// Passive Buzzer pin (GPIO 4)
+int buzzerPin = 4;
+
 long duration;
 int distance;
 
@@ -26,15 +29,25 @@ void setup() {
   pinMode(motor2Pin1, OUTPUT);
   pinMode(motor2Pin2, OUTPUT);
 
+  // Buzzer setup
+  pinMode(buzzerPin, OUTPUT);
+
   // Ultrasonic setup
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
-  // Servo setup (ESP32 အတွက် pulse width သတ်မှတ်ပေးခြင်း)
-  myServo.setPeriodHertz(50);    // Standard 50Hz servo
+  // Servo setup
+  myServo.setPeriodHertz(50);
   myServo.attach(servoPin, 500, 2400); 
   myServo.write(90); // Facing forward
   delay(500);
+}
+
+// Function for Passive Buzzer sound
+void beepSound(int frequency, int durationMs) {
+  tone(buzzerPin, frequency); // ဥပမာ - 1000Hz ကြိမ်နှုန်း အသံထုတ်ပေးမည်
+  delay(durationMs);
+  noTone(buzzerPin);          // အသံပိတ်မည်
 }
 
 // Function to measure distance cleanly
@@ -45,11 +58,10 @@ int getDistance() {
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
 
-  // Timeout ကို 30,000 microseconds (30ms) သတ်မှတ်ထားသဖြင့် စင်ဆာ ကြောက်နေပါက အကြာကြီး တန့်မနေပါ
   duration = pulseIn(echoPin, HIGH, 30000); 
   
   if (duration == 0) {
-    return 0; // စင်ဆာ ကြိုးလွတ်နေလျှင် သို့မဟုတ် မဖတ်မိလျှင် 0 ဟု သတ်မှတ်မည်
+    return 0;
   }
 
   distance = duration * 0.034 / 2; // Convert to cm
@@ -62,6 +74,7 @@ void forward() {
   digitalWrite(motor1Pin2, LOW);
   digitalWrite(motor2Pin1, HIGH);
   digitalWrite(motor2Pin2, LOW);
+  noTone(buzzerPin); // ရှေ့သွားချိန် အသံပိတ်ထားမည်
 }
 
 void backward() {
@@ -98,22 +111,26 @@ void loop() {
   Serial.print(dist);
   Serial.println(" cm");
 
-  // စင်ဆာက 20cm ထက်ဝေးပြီး အမှားအယွင်း (0 သို့မဟုတ် 400cm ထက်ကျော်) မရှိပါက ရှေ့သို့သွားမည်
-  if (dist > 20 && dist < 400) {
+  if (dist > 30 && dist < 400) {
     forward(); 
   } 
-  // စင်ဆာက အတားအဆီးတွေ့လျှင် (သို့မဟုတ်) စင်ဆာဖတ်၍မရပါက ရပ်ပြီး လမ်းကြောင်းရှာမည်
   else {
     stopCar();
-    delay(300);
+    
+    // အတားအဆီးတွေ့ပါက Passive Buzzer မှ "တီ - တီ" အသံပြုလုပ်မည် (Frequency 2000Hz)
+    beepSound(2000, 100);
+    delay(100);
+    beepSound(2000, 100);
+
+    delay(200);
 
     // Check left
-    myServo.write(150); // ဘယ်ဘက်ကြည့်မည်
+    myServo.write(150);
     delay(500);
     int leftDist = getDistance();
 
     // Check right
-    myServo.write(30);  // ညာဘက်ကြည့်မည်
+    myServo.write(30);
     delay(500);
     int rightDist = getDistance();
 
@@ -121,16 +138,17 @@ void loop() {
     myServo.write(90);
     delay(400);
 
-    // ဘယ်/ညာ အကွာအဝေးကို နှိုင်းယှဉ်၍ ပိုဝေးသောဘက်သို့ ကွေ့မည်
     if (leftDist == 0 && rightDist == 0) {
-      // စင်ဆာနှစ်ဖက်စလုံး ဖတ်မရပါက နောက်နည်းနည်းဆုတ်မည်
+      // အားလုံးပိတ်နေပါက အသံရှည်မြည်ပြီး နောက်ဆုတ်မည်
+      tone(buzzerPin, 1500);
       backward();
       delay(500);
+      noTone(buzzerPin);
       stopCar();
     } 
     else if (leftDist > rightDist) {
       left();
-      delay(600); // ကွေ့သည့်အချိန် (လိုအပ်ပါက စက္ကန့် အတိုးအလျှော့လုပ်ပါ)
+      delay(600); 
     } 
     else {
       right();
@@ -141,5 +159,5 @@ void loop() {
     delay(200);
   }
   
-  delay(50); // Loop တည်ငြိမ်စေရန်
+  delay(50);
 }
